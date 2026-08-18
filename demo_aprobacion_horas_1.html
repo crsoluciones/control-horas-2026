@@ -250,10 +250,12 @@ async function getAPI(accion, params){
   if(!resp.ok) throw new Error('HTTP ' + resp.status);
   return resp.json();
 }
+// Las escrituras también viajan por GET (no por POST): Apps Script redirige
+// internamente de script.google.com a script.googleusercontent.com, y en esa
+// redirección un POST cross-origin pierde el método/las cabeceras CORS
+// ("Failed to fetch" en el navegador). GET no tiene ese problema.
 async function postAPI(payload){
-  const resp = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-  if(!resp.ok) throw new Error('HTTP ' + resp.status);
-  return resp.json();
+  return getAPI(payload.accion, payload);
 }
 
 // ---- Personal: se llena con datos en vivo; estos 3 son respaldo mientras carga ----
