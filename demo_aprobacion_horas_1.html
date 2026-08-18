@@ -384,6 +384,7 @@ async function aprobar(idFila){
     const resp = await postAPI({
       accion: 'aprobar', sheetName: env.sheetName, fila: env.fila, aprobadorCodigo: aprobadorSel.value
     });
+    console.log('Respuesta de aprobar():', resp);
     if(!resp.ok) throw new Error(resp.error || 'Error desconocido');
     sacarDePendientes(idFila);
     resueltasSesion.unshift({ ...env, estado: 'Aprobado', aprobadorCodigo: aprobadorSel.value });
@@ -406,6 +407,7 @@ async function rechazar(idFila){
     const resp = await postAPI({
       accion: 'rechazar', sheetName: env.sheetName, fila: env.fila, aprobadorCodigo: aprobadorSel.value, motivo
     });
+    console.log('Respuesta de rechazar():', resp);
     if(!resp.ok) throw new Error(resp.error || 'Error desconocido');
     env.motivo = motivo;
     ultimoRechazo = env;
