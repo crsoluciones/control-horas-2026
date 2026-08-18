@@ -341,7 +341,18 @@ $('cubriendoChk').addEventListener('change', (e) => {
 cubriendoSel.addEventListener('change', refreshClientes);
 
 // ---- Fecha por defecto: hoy ----
-$('fecha').valueAsDate = new Date();
+// OJO: "input.valueAsDate = new Date()" arma el valor usando el día en UTC,
+// no el día local del navegador. En Ecuador (UTC-5) eso hacía que, por las
+// noches, el campo mostrara el día siguiente (o antes de la medianoche UTC,
+// el correcto por pura casualidad) en vez de "hoy" según el reloj local.
+// Armamos el string YYYY-MM-DD a mano con las partes LOCALES de la fecha.
+(function fijarFechaHoyLocal(){
+  const hoy = new Date();
+  const y = hoy.getFullYear();
+  const m = String(hoy.getMonth() + 1).padStart(2, '0');
+  const d = String(hoy.getDate()).padStart(2, '0');
+  $('fecha').value = `${y}-${m}-${d}`;
+})();
 
 // ---- Poblar Actividad según el rol de quien carga ----
 const actividadSel = $('actividad');
