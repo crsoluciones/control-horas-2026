@@ -284,6 +284,11 @@ function poblarAprobadores(){
 poblarAprobadores();
 aprobadorSel.addEventListener('change', render);
 
+// Si el link trae "?aprobador=CODIGO" (como el que manda el correo de
+// "pendiente por aprobar"), se preselecciona ese aprobador directo, sin que
+// la persona tenga que elegirlo a mano del desplegable.
+const aprobadorDesdeUrl = new URLSearchParams(window.location.search).get('aprobador');
+
 let pendientes = [];       // lo que devuelve el Excel real para el aprobador elegido
 let resueltasSesion = [];  // lo que tú apruebas/rechazas mientras tienes esta página abierta
 let ultimoRechazo = null;
@@ -291,6 +296,11 @@ let ultimoRechazo = null;
 function nombreCliente(env){
   if(!env.clienteCodigo) return 'Tiempo interno (sin cliente)';
   return env.clienteNombre ? `${env.clienteCodigo} — ${env.clienteNombre}` : env.clienteCodigo;
+}
+
+function nombreActividad(env){
+  if(!env.actividadCodigo) return '—';
+  return env.actividadNombre ? `${env.actividadNombre} (${env.actividadCodigo})` : env.actividadCodigo;
 }
 
 async function cargarPendientes(){
@@ -329,7 +339,7 @@ function render(){
       <td>${env.fecha}</td>
       <td>${env.colaboradorNombre}${esPropio ? ' <span class="pill tuyo">tuyo</span>' : ''}</td>
       <td>${nombreCliente(env)}</td>
-      <td>${env.actividadCodigo}</td>
+      <td>${nombreActividad(env)}</td>
       <td>${env.horas} h</td>
       <td>
         <div class="row-actions">
@@ -435,7 +445,7 @@ function mostrarCorreoRechazo(env){
         <div class="line"><b>Colaborador</b>${env.colaboradorNombre}</div>
         <div class="line"><b>Fecha</b>${env.fecha}</div>
         <div class="line"><b>Cliente</b>${nombreCliente(env)}</div>
-        <div class="line"><b>Actividad</b>${env.actividadCodigo}</div>
+        <div class="line"><b>Actividad</b>${nombreActividad(env)}</div>
         <div class="line"><b>Horas</b>${env.horas} h</div>
         <div class="reason"><b>Motivo del rechazo (${aprob.nombre}):</b><br>${env.motivo}</div>
         <p class="hint" style="margin-top:14px;">Este correo ya se envió de verdad a la persona que cargó la hora — esto es solo la confirmación en pantalla.</p>
@@ -452,6 +462,9 @@ $('refreshBtn').addEventListener('click', async () => { await cargarPendientes()
     if(datos && datos.length) PERSONAL = datos;
   }catch(err){ /* nos quedamos con el respaldo de arriba */ }
   poblarAprobadores();
+  if(aprobadorDesdeUrl && [...aprobadorSel.options].some(o => o.value === aprobadorDesdeUrl)){
+    aprobadorSel.value = aprobadorDesdeUrl;
+  }
   await cargarPendientes();
   render();
 })();
