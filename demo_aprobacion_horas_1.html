@@ -242,7 +242,7 @@
 const $ = (id) => document.getElementById(id);
 
 // ---- Conexión con tu Excel real (Google Apps Script) ----
-const API_URL = 'https://script.google.com/macros/s/AKfycbxc28l-fXpZMIPQCPsXXnxFjMBqczSLOkAze48CJk_WxYgZIMIzQOOSRzZX0BEUktbXTw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwo2o-Jq2UUArHdOk7IUfDr7FEQcpppbuQniOJ3sQI79AV4tWJ7rO1JKwnkJjgOfzaSFw/exec';
 
 async function getAPI(accion, params){
   const qs = new URLSearchParams({ accion, ...(params || {}) });
