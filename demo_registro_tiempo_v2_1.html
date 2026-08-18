@@ -176,6 +176,7 @@
 
   <div class="card">
     <h2>1 · ¿Quién carga?</h2>
+    <div id="fuenteDatos" class="hint" style="margin-bottom:12px;">Conectando con tu Excel…</div>
     <div class="row two">
       <div class="field">
         <label for="quien">Tu código</label>
@@ -233,7 +234,7 @@
     <h2>3 · Tus líneas de hoy</h2>
     <table id="tabla">
       <thead>
-        <tr><th>Actividad</th><th>Cliente</th><th>Horas</th><th>Descripción</th><th></th></tr>
+        <tr><th>Actividad</th><th>Cliente</th><th>Horas</th><th>Descripción</th><th>Estado</th><th></th></tr>
       </thead>
       <tbody id="tablaBody"></tbody>
     </table>
@@ -250,15 +251,16 @@
   </div>
 
   <div class="actions">
-    <button id="exportBtn" class="secondary">⬇ Descargar para pegar en REGISTRO (.xlsx)</button>
+    <button id="sendBtn">Enviar a tu Excel</button>
+    <button id="exportBtn" class="secondary">⬇ Descargar respaldo (.xlsx)</button>
   </div>
+  <div id="sendMsg" class="hint"></div>
 
   <div class="footnote">
-    Esto es una <b>demo funcional</b>, no está conectada todavía al libro real. El botón de descarga genera
-    un .xlsx con las mismas columnas A–F de la hoja REGISTRO (Fecha, Cód. Colaborador, Cód. Actividad,
-    Cód. Cliente, Horas, Descripción), listo para copiar y pegar. El siguiente paso — si te sirve el enfoque —
-    es conectar este mismo formulario a Power Automate o a un Script de Office para que escriba directo en el
-    Excel de SharePoint, sin copiar y pegar nada.
+    <b>Enviar a tu Excel</b> manda cada línea directo a la pestaña del mes correspondiente, al bloque de tu
+    colaborador, con Estado = "Enviado" — queda lista para que la apruebe quien corresponda. El botón de
+    descarga sigue disponible como respaldo manual (mismas columnas Fecha, Cód. Actividad, Cód. Cliente,
+    Horas, Descripción) por si el envío en vivo falla y necesitas pegarlo tú mismo.
   </div>
 
 </div>
@@ -270,6 +272,24 @@ let CLIENTES = [{"codigo": "JZ-001", "nombre": "ACEPTACIONES S.A. ACCEPTANCE", "
 
 const $ = (id) => document.getElementById(id);
 
+// ---- Conexión con tu Excel real (Google Apps Script) ----
+const API_URL = 'https://script.google.com/a/macros/crsoluciones.net/s/AKfycbxc28l-fXpZMIPQCPsXXnxFjMBqczSLOkAze48CJk_WxYgZIMIzQOOSRzZX0BEUktbXTw/exec';
+
+async function getAPI(accion, params){
+  const qs = new URLSearchParams({ accion, ...(params || {}) });
+  const resp = await fetch(`${API_URL}?${qs.toString()}`);
+  if(!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.json();
+}
+
+// Sin encabezados custom a propósito: así el POST cuenta como "solicitud simple"
+// y el navegador no dispara un preflight OPTIONS que Apps Script no responde.
+async function postAPI(payload){
+  const resp = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+  if(!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.json();
+}
+
 function fullName(code){
   const p = PERSONAL.find(p => p.codigo === code);
   return p ? p.nombre : '';
@@ -280,18 +300,27 @@ function personaByCode(code){
 
 // ---- Poblar "Tu código" ----
 const quienSel = $('quien');
-PERSONAL.forEach(p => {
-  const opt = document.createElement('option');
-  opt.value = p.codigo;
-  opt.textContent = `${p.codigo} — ${p.nombre} (${p.rol})`;
-  quienSel.appendChild(opt);
-});
-// Arranca con alguien que sí tenga cartera propia (un gerente), no con el socio,
-// para que el demo no se vea "vacío" al abrirlo.
-const codigosConClientes = new Set(CLIENTES.map(c => c.gerente).concat(CLIENTES.map(c => c.encargado))
-  .map(nombre => (PERSONAL.find(p => p.nombre === nombre) || {}).codigo).filter(Boolean));
-const primerConCartera = PERSONAL.find(p => codigosConClientes.has(p.codigo));
-if(primerConCartera) quienSel.value = primerConCartera.codigo;
+function poblarQuien(){
+  const valorPrevio = quienSel.value;
+  quienSel.innerHTML = '';
+  PERSONAL.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.codigo;
+    opt.textContent = `${p.codigo} — ${p.nombre} (${p.rol})`;
+    quienSel.appendChild(opt);
+  });
+  // Si ya había alguien elegido (ej. al refrescar con datos en vivo), respétalo.
+  if(valorPrevio && PERSONAL.some(p => p.codigo === valorPrevio)){
+    quienSel.value = valorPrevio;
+    return;
+  }
+  // Si no, arranca con alguien que sí tenga cartera propia (un gerente), no con el socio,
+  // para que el formulario no se vea "vacío" al abrirlo.
+  const codigosConClientes = new Set(CLIENTES.map(c => c.gerente).concat(CLIENTES.map(c => c.encargado))
+    .map(nombre => (PERSONAL.find(p => p.nombre === nombre) || {}).codigo).filter(Boolean));
+  const primerConCartera = PERSONAL.find(p => codigosConClientes.has(p.codigo));
+  if(primerConCartera) quienSel.value = primerConCartera.codigo;
+}
 
 // ---- Poblar "Cubriendo a" ----
 const cubriendoSel = $('cubriendo');
@@ -304,7 +333,6 @@ function refreshCubriendoOptions(){
     cubriendoSel.appendChild(opt);
   });
 }
-refreshCubriendoOptions();
 
 $('cubriendoChk').addEventListener('change', (e) => {
   $('cubriendoWrap').style.display = e.target.checked ? 'block' : 'none';
@@ -392,7 +420,35 @@ function refreshClientes(){
 
 quienSel.addEventListener('change', () => { refreshCubriendoOptions(); refreshActividades(); });
 actividadSel.addEventListener('change', refreshClientes);
-refreshActividades();
+
+// ---- Arranque: pinta ya con los datos embebidos y, en paralelo, intenta traer los datos en vivo ----
+function pintarTodo(){
+  poblarQuien();
+  refreshCubriendoOptions();
+  refreshActividades(); // esto ya llama refreshClientes() adentro
+}
+pintarTodo();
+
+(async function cargarDatosEnVivo(){
+  try{
+    const datos = await getAPI('todo');
+    if(datos.personal && datos.personal.length){
+      PERSONAL.splice(0, PERSONAL.length, ...datos.personal.map(p => ({ codigo: p.codigo, nombre: p.nombre, rol: p.rol, activo: 'SI' })));
+    }
+    if(datos.catalogo && datos.catalogo.length){
+      CATALOGO.splice(0, CATALOGO.length, ...datos.catalogo.map(c => ({ codigo: c.codigo, actividad: c.actividad, tipo: c.tipo, grupo: c.grupo, estado: c.estado, quien: c.quien || 'TODOS' })));
+    }
+    if(datos.clientes && datos.clientes.length){
+      CLIENTES.splice(0, CLIENTES.length, ...datos.clientes.map(c => ({ codigo: c.codigo, nombre: c.nombre, grupo: c.grupo, gerente: c.gerente, encargado: c.encargado, estado: c.estado })));
+    }
+    pintarTodo();
+    $('fuenteDatos').textContent = '✓ Datos en vivo desde tu Excel, actualizados ahora mismo.';
+    $('fuenteDatos').classList.remove('warn');
+  }catch(err){
+    $('fuenteDatos').textContent = '⚠ No se pudo conectar con tu Excel ahora mismo — usando la última copia guardada en este formulario. Al enviar, se reintentará conectar.';
+    $('fuenteDatos').classList.add('warn');
+  }
+})();
 
 // ---- Estado de líneas cargadas hoy ----
 let lineas = [];
@@ -404,12 +460,16 @@ function render(){
 
   lineas.forEach((l, i) => {
     const tr = document.createElement('tr');
+    const estadoTxt = l.estadoEnvio === 'enviada' ? '✓ Enviada'
+      : l.estadoEnvio === 'error' ? '⚠ No se pudo enviar'
+      : 'Pendiente de enviar';
     tr.innerHTML = `
       <td>${l.actCodigo} — ${l.actNombre}</td>
       <td>${l.cliCodigo ? (l.cliCodigo + ' — ' + l.cliNombre) : '—'}</td>
       <td>${l.horas} h</td>
       <td>${l.desc || '<span class="hint">(sin descripción)</span>'}</td>
-      <td><button class="ghost" data-i="${i}">quitar</button></td>`;
+      <td class="hint">${estadoTxt}</td>
+      <td>${l.estadoEnvio === 'enviada' ? '' : `<button class="ghost" data-i="${i}">quitar</button>`}</td>`;
     body.appendChild(tr);
   });
 
@@ -461,7 +521,8 @@ $('addBtn').addEventListener('click', () => {
     cliCodigo: cargable ? cliOpt.value : '',
     cliNombre: cargable ? cliOpt.textContent.split(' — ')[1] : '',
     horas: horas,
-    desc: $('desc').value.trim()
+    desc: $('desc').value.trim(),
+    estadoEnvio: 'pendiente'
   });
 
   $('horas').value = '';
@@ -469,12 +530,56 @@ $('addBtn').addEventListener('click', () => {
   render();
 });
 
-// ---- Cartera de clientes ----
-// Por ahora CLIENTES viene incrustado con los datos de tu Excel al momento de generar esta demo.
-// El siguiente paso (pendiente) es que este bloque, en vez de traer los datos fijos, los pida a un
-// endpoint conectado a tu Excel real (vía Power Automate/SharePoint), de solo lectura para el equipo.
+// ---- Enviar a tu Excel real ----
+$('sendBtn').addEventListener('click', async () => {
+  const pendientes = lineas.filter(l => l.estadoEnvio !== 'enviada');
+  if(!pendientes.length){
+    $('sendMsg').textContent = 'No hay líneas pendientes por enviar.';
+    return;
+  }
+  $('sendBtn').disabled = true;
+  let ok = 0, fallidas = 0;
 
-// ---- Exportar a .xlsx con el mismo formato de REGISTRO (columnas A-F) ----
+  for(const l of pendientes){
+    try{
+      const resp = await postAPI({
+        accion: 'agregar',
+        colaboradorCodigo: l.colaborador,
+        fecha: l.fecha,
+        actividadCodigo: l.actCodigo,
+        clienteCodigo: l.cliCodigo,
+        horas: l.horas,
+        descripcion: l.desc
+      });
+      if(resp.ok){
+        l.estadoEnvio = 'enviada';
+        ok++;
+      } else {
+        l.estadoEnvio = 'error';
+        l.errorEnvio = resp.error || 'Error desconocido';
+        fallidas++;
+      }
+    }catch(err){
+      l.estadoEnvio = 'error';
+      l.errorEnvio = String(err);
+      fallidas++;
+    }
+    render();
+  }
+
+  $('sendBtn').disabled = false;
+  const msg = $('sendMsg');
+  if(fallidas === 0){
+    msg.textContent = `✓ Se enviaron ${ok} línea(s) a tu Excel correctamente.`;
+    msg.classList.remove('warn');
+  } else {
+    const ultimoError = pendientes.find(l => l.estadoEnvio === 'error')?.errorEnvio || '';
+    msg.textContent = `Se enviaron ${ok} línea(s). ${fallidas} fallaron${ultimoError ? ' — ' + ultimoError : ''}. Puedes reintentar con el mismo botón, o usar la descarga de respaldo mientras tanto.`;
+    msg.classList.add('warn');
+  }
+});
+
+// ---- Exportar a .xlsx con el mismo formato de REGISTRO (columnas A-F), como respaldo manual ----
 $('exportBtn').addEventListener('click', () => {
   if(!lineas.length){
     alert('Agrega al menos una línea antes de descargar.');
