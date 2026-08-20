@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Clientes — Horas Presupuestadas vs Reales · C&amp;R Soluciones</title>
+<style>
+  :root{
+    --verde:#0f9d58; --verde-bg:#e6f6ec;
+    --amarillo:#b7860b; --amarillo-bg:#fdf3d9;
+    --rojo:#b42318; --rojo-bg:#fdecea;
+    --gris:#6b7280; --gris-bg:#f0f1f3;
+    --texto:#111827; --texto-suave:#6b7280; --borde:#e5e7eb;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:Arial, Helvetica, sans-serif; background:#f3f4f6; color:var(--texto);
+  }
+  header{
+    background:#ffffff; border-bottom:1px solid var(--borde); padding:20px 24px;
+    position:sticky; top:0; z-index:5;
+  }
+  header h1{ margin:0 0 4px 0; font-size:19px; }
+  header p{ margin:0; font-size:13px; color:var(--texto-suave); }
+  .wrap{ max-width:920px; margin:0 auto; padding:20px 16px 60px 16px; }
+  .toolbar{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px;
+  }
+  .toolbar input[type=text]{
+    flex:1; min-width:180px; padding:9px 12px; border:1px solid var(--borde); border-radius:8px; font-size:14px;
+  }
+  .filtro-chip{
+    padding:7px 12px; border-radius:999px; border:1px solid var(--borde); background:#fff;
+    font-size:12px; font-weight:600; cursor:pointer; color:var(--texto-suave); white-space:nowrap;
+  }
+  .filtro-chip.activo{ border-color:transparent; color:#fff; }
+  .filtro-chip[data-f="TODOS"].activo{ background:#374151; }
+  .filtro-chip[data-f="VERDE"].activo{ background:var(--verde); }
+  .filtro-chip[data-f="AMARILLO"].activo{ background:var(--amarillo); }
+  .filtro-chip[data-f="ROJO"].activo{ background:var(--rojo); }
+  .filtro-chip[data-f="GRIS"].activo{ background:var(--gris); }
+  #resumen{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px; margin-bottom:18px;
+  }
+  .tarjeta-resumen{
+    background:#fff; border:1px solid var(--borde); border-radius:10px; padding:12px 14px;
+  }
+  .tarjeta-resumen b{ display:block; font-size:22px; }
+  .tarjeta-resumen span{ font-size:12px; color:var(--texto-suave); }
+  .cliente{
+    background:#fff; border:1px solid var(--borde); border-radius:10px; margin-bottom:10px; overflow:hidden;
+  }
+  .cliente-cab{
+    display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer;
+  }
+  .semaforo-punto{
+    width:12px; height:12px; border-radius:50%; flex:0 0 auto;
+  }
+  .semaforo-punto.VERDE{ background:var(--verde); }
+  .semaforo-punto.AMARILLO{ background:var(--amarillo); }
+  .semaforo-punto.ROJO{ background:var(--rojo); }
+  .semaforo-punto.GRIS{ background:var(--gris); }
+  .cliente-nombre{ flex:1; min-width:0; }
+  .cliente-nombre b{ display:block; font-size:14px; }
+  .cliente-nombre span{ font-size:12px; color:var(--texto-suave); }
+  .cliente-horas{ text-align:right; font-size:13px; white-space:nowrap; }
+  .cliente-horas b{ font-size:14px; }
+  .cliente-pct{
+    font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; white-space:nowrap;
+  }
+  .cliente-pct.VERDE{ background:var(--verde-bg); color:var(--verde); }
+  .cliente-pct.AMARILLO{ background:var(--amarillo-bg); color:var(--amarillo); }
+  .cliente-pct.ROJO{ background:var(--rojo-bg); color:var(--rojo); }
+  .cliente-pct.GRIS{ background:var(--gris-bg); color:var(--gris); }
+  .barra{
+    height:6px; background:#f0f1f3; border-radius:999px; overflow:hidden; margin:0 16px 14px 16px;
+  }
+  .barra > div{ height:100%; border-radius:999px; }
+  .barra > div.VERDE{ background:var(--verde); }
+  .barra > div.AMARILLO{ background:var(--amarillo); }
+  .barra > div.ROJO{ background:var(--rojo); }
+  .barra > div.GRIS{ background:var(--gris); }
+  .chevron{ transition:transform .15s ease; color:var(--texto-suave); flex:0 0 auto; }
+  .cliente.abierto .chevron{ transform:rotate(90deg); }
+  .detalle{ display:none; border-top:1px solid var(--borde); padding:12px 16px 16px 16px; }
+  .cliente.abierto .detalle{ display:block; }
+  .fila-persona{
+    display:flex; justify-content:space-between; align-items:center; padding:7px 0; font-size:13px;
+    border-bottom:1px solid #f5f5f5;
+  }
+  .fila-persona:last-child{ border-bottom:none; }
+  .fila-persona .nombre{ color:var(--texto); }
+  .fila-persona .horas{ color:var(--texto-suave); font-weight:600; }
+  .sin-detalle{ font-size:13px; color:var(--texto-suave); padding:4px 0; }
+  #estado{ text-align:center; padding:40px 0; color:var(--texto-suave); font-size:14px; }
+  #estado.oculto{ display:none; }
+  .actualizado{ text-align:center; font-size:11px; color:var(--texto-suave); margin-top:20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Horas Presupuestadas vs. Reales por Cliente</h1>
+  <p>Solo lectura — datos en vivo de tu Excel de control de horas. Haz clic en un cliente para ver el detalle por colaborador.</p>
+</header>
+
+<div class="wrap">
+
+  <div id="resumen"></div>
+
+  <div class="toolbar">
+    <input type="text" id="buscador" placeholder="Buscar cliente...">
+    <button class="filtro-chip activo" data-f="TODOS">Todos</button>
+    <button class="filtro-chip" data-f="ROJO">🔴 Excedidos</button>
+    <button class="filtro-chip" data-f="AMARILLO">🟡 Por llegar al tope</button>
+    <button class="filtro-chip" data-f="VERDE">🟢 Dentro de rango</button>
+    <button class="filtro-chip" data-f="GRIS">⚪ Sin iniciar</button>
+  </div>
+
+  <div id="estado">Cargando datos en vivo desde el Excel...</div>
+  <div id="lista"></div>
+
+  <p class="actualizado" id="actualizado"></p>
+</div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbwJxUX8ELanzu5PE4Z1jZ57oi7dqae0uxMM6GJFOnlZGQnfErtjacQfwitoI4pzufABdQ/exec';
+
+const $ = (id) => document.getElementById(id);
+
+async function getAPI(accion, params){
+  const qs = new URLSearchParams({ accion, ...(params || {}) });
+  const resp = await fetch(`${API_URL}?${qs.toString()}`);
+  if(!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.json();
+}
+
+// A veces Apps Script tarda en responder (arranque en frio, hoja grande
+// recalculando). Reintentamos una vez en silencio antes de mostrar error.
+async function getAPIConReintento(accion, params){
+  try{
+    return await getAPI(accion, params);
+  }catch(err){
+    await new Promise(r => setTimeout(r, 1500));
+    return getAPI(accion, params);
+  }
+}
+
+let DATOS = [];
+let filtroActivo = 'TODOS';
+
+const ETIQUETAS = {
+  VERDE: 'Dentro de rango',
+  AMARILLO: 'Cerca del tope',
+  ROJO: 'Excedido',
+  GRIS: 'Sin iniciar'
+};
+
+function fmtHoras(n){
+  return (Math.round(n * 10) / 10).toLocaleString('es-EC');
+}
+
+function renderResumen(){
+  const total = DATOS.length;
+  const conteos = { VERDE:0, AMARILLO:0, ROJO:0, GRIS:0 };
+  DATOS.forEach(d => conteos[d.semaforo] = (conteos[d.semaforo]||0) + 1);
+  $('resumen').innerHTML = `
+    <div class="tarjeta-resumen"><b>${total}</b><span>Clientes activos</span></div>
+    <div class="tarjeta-resumen"><b style="color:var(--rojo)">${conteos.ROJO}</b><span>🔴 Excedidos</span></div>
+    <div class="tarjeta-resumen"><b style="color:var(--amarillo)">${conteos.AMARILLO}</b><span>🟡 Cerca del tope</span></div>
+    <div class="tarjeta-resumen"><b style="color:var(--verde)">${conteos.VERDE}</b><span>🟢 Dentro de rango</span></div>
+    <div class="tarjeta-resumen"><b style="color:var(--gris)">${conteos.GRIS}</b><span>⚪ Sin iniciar</span></div>
+  `;
+}
+
+function renderLista(){
+  const texto = $('buscador').value.trim().toLowerCase();
+  const lista = $('lista');
+
+  const filtrados = DATOS.filter(d => {
+    if (filtroActivo !== 'TODOS' && d.semaforo !== filtroActivo) return false;
+    if (texto && !d.cliente.toLowerCase().includes(texto)) return false;
+    return true;
+  });
+
+  if (!filtrados.length){
+    lista.innerHTML = '<p style="text-align:center; color:var(--texto-suave); font-size:13px; padding:30px 0;">No hay clientes que coincidan con el filtro.</p>';
+    return;
+  }
+
+  lista.innerHTML = filtrados.map((d, i) => {
+    const pctTxt = Math.round((d.pctConsumido || 0) * 100) + '%';
+    const anchoBarra = Math.min(100, Math.round((d.pctConsumido || 0) * 100));
+    const detalleHtml = (d.porPersona && d.porPersona.length)
+      ? d.porPersona.map(p => `
+          <div class="fila-persona">
+            <span class="nombre">${p.nombre}</span>
+            <span class="horas">${fmtHoras(p.horas)} h</span>
+          </div>`).join('')
+      : '<div class="sin-detalle">Todavía no hay horas cargadas a este cliente.</div>';
+
+    return `
+      <div class="cliente" data-idx="${i}">
+        <div class="cliente-cab" onclick="toggleCliente(this)">
+          <span class="semaforo-punto ${d.semaforo}"></span>
+          <div class="cliente-nombre">
+            <b>${d.cliente}</b>
+            <span>${d.encargado ? 'Encargado: ' + d.encargado : (d.codigo || '')}</span>
+          </div>
+          <div class="cliente-horas">
+            <b>${fmtHoras(d.horasReales)} / ${fmtHoras(d.horasPresupuestadas)} h</b><br>
+            <span class="cliente-pct ${d.semaforo}">${pctTxt} · ${ETIQUETAS[d.semaforo] || ''}</span>
+          </div>
+          <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"></polyline></svg>
+        </div>
+        <div class="barra"><div class="${d.semaforo}" style="width:${anchoBarra}%"></div></div>
+        <div class="detalle">${detalleHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+function toggleCliente(cabecera){
+  cabecera.closest('.cliente').classList.toggle('abierto');
+}
+
+function aplicarFiltro(f){
+  filtroActivo = f;
+  document.querySelectorAll('.filtro-chip').forEach(b => {
+    b.classList.toggle('activo', b.dataset.f === f);
+  });
+  renderLista();
+}
+
+document.querySelectorAll('.filtro-chip').forEach(b => {
+  b.addEventListener('click', () => aplicarFiltro(b.dataset.f));
+});
+$('buscador').addEventListener('input', renderLista);
+
+async function cargar(){
+  try{
+    const datos = await getAPIConReintento('dashboardClientes');
+    DATOS = Array.isArray(datos) ? datos : [];
+    $('estado').classList.add('oculto');
+    renderResumen();
+    renderLista();
+    $('actualizado').textContent = 'Última actualización: ' + new Date().toLocaleString('es-EC');
+  }catch(err){
+    $('estado').textContent = 'No se pudo cargar el dashboard: ' + err.message + '. Recarga la página para intentarlo de nuevo.';
+  }
+}
+
+cargar();
+</script>
+
+</body>
+</html>
