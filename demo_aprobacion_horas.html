@@ -257,6 +257,19 @@ async function getAPI(accion, params){
 async function postAPI(payload){
   return getAPI(payload.accion, payload);
 }
+// A veces Apps Script tarda tanto en responder (arranque en frio, correo con
+// imagen, etc.) que el navegador corta la conexion y fetch() falla con
+// "Failed to fetch" en vez de simplemente demorarse. Antes de mostrar el
+// error al usuario, reintentamos una vez en silencio: si fue solo una
+// demora puntual, la segunda vez suele funcionar sin que nadie note nada.
+async function postAPIConReintento(payload){
+  try{
+    return await postAPI(payload);
+  }catch(err){
+    await new Promise(r => setTimeout(r, 1500));
+    return postAPI(payload);
+  }
+}
 
 // ---- Personal: se llena con datos en vivo; estos 3 son respaldo mientras carga ----
 let PERSONAL = [
@@ -391,7 +404,7 @@ async function aprobar(idFila){
   const env = pendientes.find(e => `${e.sheetName}-${e.fila}` === idFila);
   if(!env) return;
   try{
-    const resp = await postAPI({
+    const resp = await postAPIConReintento({
       accion: 'aprobar', sheetName: env.sheetName, fila: env.fila, aprobadorCodigo: aprobadorSel.value
     });
     console.log('Respuesta de aprobar():', resp);
@@ -400,7 +413,7 @@ async function aprobar(idFila){
     resueltasSesion.unshift({ ...env, estado: 'Aprobado', aprobadorCodigo: aprobadorSel.value });
     render();
   }catch(err){
-    alert('No se pudo aprobar en el Excel: ' + err.message + '\nInténtalo de nuevo.');
+    alert('No se pudo aprobar en el Excel incluso tras reintentarlo: ' + err.message + '\n\nEsto suele pasar cuando Google tarda demasiado en responder. Espera unos segundos y vuelve a intentarlo.');
   }
 }
 
@@ -414,7 +427,7 @@ async function rechazar(idFila){
     return;
   }
   try{
-    const resp = await postAPI({
+    const resp = await postAPIConReintento({
       accion: 'rechazar', sheetName: env.sheetName, fila: env.fila, aprobadorCodigo: aprobadorSel.value, motivo
     });
     console.log('Respuesta de rechazar():', resp);
@@ -426,7 +439,7 @@ async function rechazar(idFila){
     render();
     mostrarCorreoRechazo(env);
   }catch(err){
-    alert('No se pudo rechazar en el Excel: ' + err.message + '\nInténtalo de nuevo.');
+    alert('No se pudo rechazar en el Excel incluso tras reintentarlo: ' + err.message + '\n\nEsto suele pasar cuando Google tarda demasiado en responder. Espera unos segundos y vuelve a intentarlo.');
   }
 }
 
