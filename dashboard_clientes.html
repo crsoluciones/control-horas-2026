@@ -81,6 +81,8 @@
   .cliente-pct.AMARILLO{ background:var(--amarillo-bg); color:var(--amarillo); }
   .cliente-pct.ROJO{ background:var(--rojo-bg); color:var(--rojo); }
   .cliente-pct.GRIS{ background:var(--gris-bg); color:var(--gris); }
+  .cliente-restante{ display:block; font-size:11px; color:var(--texto-suave); margin-top:4px; }
+  .cliente-restante.excedido{ color:var(--rojo); font-weight:600; }
   .barra{
     height:6px; background:#f0f1f3; border-radius:999px; overflow:hidden; margin:0 16px 14px 16px;
   }
@@ -215,6 +217,12 @@ function renderLista(){
     const topPersona = (d.porPersona && d.porPersona[0]) ? d.porPersona[0] : null;
     const topTxt = topPersona ? `Top: ${topPersona.nombre} (${fmtHoras(topPersona.horas)} h)` : '';
 
+    const restante = (d.horasPresupuestadas || 0) - (d.horasReales || 0);
+    const restanteTxt = restante >= 0
+      ? `Faltan ${fmtHoras(restante)} h por ejecutar`
+      : `Excedido por ${fmtHoras(Math.abs(restante))} h`;
+    const restanteClase = restante < 0 ? 'cliente-restante excedido' : 'cliente-restante';
+
     return `
       <div class="cliente" data-idx="${i}" data-codigo="${d.codigo || ''}" data-cliente="${d.cliente}" data-presupuesto="${d.horasPresupuestadas}">
         <div class="cliente-cab" onclick="toggleCliente(this)">
@@ -227,6 +235,7 @@ function renderLista(){
           <div class="cliente-horas">
             <b>${fmtHoras(d.horasReales)} / ${fmtHoras(d.horasPresupuestadas)} h</b><br>
             <span class="cliente-pct ${d.semaforo}">${pctTxt} · ${ETIQUETAS[d.semaforo] || ''}</span>
+            <span class="${restanteClase}">${restanteTxt}</span>
           </div>
           <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"></polyline></svg>
         </div>
