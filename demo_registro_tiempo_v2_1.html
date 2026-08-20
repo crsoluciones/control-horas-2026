@@ -359,8 +359,13 @@ const actividadSel = $('actividad');
 function refreshActividades(){
   actividadSel.innerHTML = '';
   const persona = personaByCode(quienSel.value);
-  const esGerencia = persona && (persona.rol === 'Socio' || persona.rol === 'Gerente');
-  CATALOGO.filter(c => c.estado === 'VIGENTE' && (c.quien === 'TODOS' || (esGerencia && c.quien === 'GERENCIA')))
+  const rol = persona ? persona.rol : '';
+  CATALOGO.filter(c => c.estado === 'VIGENTE' && (
+    c.quien === 'TODOS' ||
+    (c.quien === 'GERENCIA' && (rol === 'Socio' || rol === 'Gerente')) ||
+    (c.quien === 'SOCIO' && rol === 'Socio') ||
+    (c.quien === 'ADM' && rol === 'Administracion')
+  ))
     .forEach(c => {
       const opt = document.createElement('option');
       opt.value = c.codigo;
