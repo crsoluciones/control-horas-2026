@@ -259,6 +259,28 @@ const COLOR_SEMAFORO = {
   GRIS: '#9a9a9a'
 };
 
+// Dibuja el número de horas encima de cada barra (sin depender de un plugin externo).
+const pluginEtiquetasHoras = {
+  id: 'etiquetasHoras',
+  afterDatasetsDraw(chart){
+    const { ctx } = chart;
+    chart.data.datasets.forEach((dataset, di) => {
+      const meta = chart.getDatasetMeta(di);
+      meta.data.forEach((barra, i) => {
+        const valor = dataset.data[i];
+        ctx.save();
+        ctx.fillStyle = '#3a3a3a';
+        ctx.font = '600 11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(fmtHoras(valor) + ' h', barra.x, barra.y - 4);
+        ctx.restore();
+      });
+    });
+  }
+};
+Chart.register(pluginEtiquetasHoras);
+
 function toggleCliente(cabecera){
   const contenedor = cabecera.closest('.cliente');
   contenedor.classList.toggle('abierto');
@@ -290,13 +312,14 @@ function toggleCliente(cabecera){
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: { top: 24 } },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: ctx => fmtHoras(ctx.parsed.y) + ' h' } }
       },
       scales: {
         x: { ticks: { font: { size: 11 } } },
-        y: { ticks: { font: { size: 10 } }, beginAtZero: true }
+        y: { ticks: { font: { size: 10 } }, beginAtZero: true, suggestedMax: Math.max(presupuesto, real, porEjecutar) * 1.15 }
       }
     }
   });
