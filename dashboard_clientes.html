@@ -224,7 +224,7 @@ function renderLista(){
     const restanteClase = restante < 0 ? 'cliente-restante excedido' : 'cliente-restante';
 
     return `
-      <div class="cliente" data-idx="${i}" data-codigo="${d.codigo || ''}" data-cliente="${d.cliente}" data-presupuesto="${d.horasPresupuestadas}">
+      <div class="cliente" data-idx="${i}" data-codigo="${d.codigo || ''}" data-cliente="${d.cliente}" data-presupuesto="${d.horasPresupuestadas}" data-real="${d.horasReales}" data-semaforo="${d.semaforo}">
         <div class="cliente-cab" onclick="toggleCliente(this)">
           <span class="semaforo-punto ${d.semaforo}"></span>
           <div class="cliente-nombre">
@@ -242,8 +242,7 @@ function renderLista(){
         <div class="barra"><div class="${d.semaforo}" style="width:${anchoBarra}%"></div></div>
         <div class="detalle">
           <div class="grafico-wrap">
-            <div class="grafico-estado">Cargando tendencia...</div>
-            <canvas class="grafico-canvas" style="display:none;"></canvas>
+            <canvas class="grafico-canvas"></canvas>
           </div>
           ${detalleHtml}
         </div>
@@ -252,9 +251,15 @@ function renderLista(){
 }
 
 const graficosCache = {}; // codigo/cliente -> instancia Chart.js ya creada
-const historialCache = {}; // codigo/cliente -> datos ya pedidos al backend
 
-async function toggleCliente(cabecera){
+const COLOR_SEMAFORO = {
+  VERDE: '#2e8b57',
+  AMARILLO: '#b7860b',
+  ROJO: '#c0392b',
+  GRIS: '#9a9a9a'
+};
+
+function toggleCliente(cabecera){
   const contenedor = cabecera.closest('.cliente');
   contenedor.classList.toggle('abierto');
   if (!contenedor.classList.contains('abierto')) return;
@@ -263,67 +268,38 @@ async function toggleCliente(cabecera){
   if (graficosCache[clave]) return; // ya se dibujo antes, no hay que repetir
 
   const wrap = contenedor.querySelector('.grafico-wrap');
-  const estadoEl = wrap.querySelector('.grafico-estado');
   const canvas = wrap.querySelector('.grafico-canvas');
   const presupuesto = Number(contenedor.dataset.presupuesto) || 0;
+  const real = Number(contenedor.dataset.real) || 0;
+  const porEjecutar = Math.max(0, presupuesto - real);
+  const colorReal = COLOR_SEMAFORO[contenedor.dataset.semaforo] || '#2f5fa3';
 
-  try{
-    let historial = historialCache[clave];
-    if (!historial){
-      historial = await getAPIConReintento('historialCliente', { codigo: contenedor.dataset.codigo });
-      historialCache[clave] = historial;
-    }
+  wrap.style.height = '190px';
 
-    if (!Array.isArray(historial) || !historial.length){
-      estadoEl.textContent = 'Todavía no hay horas cargadas a este cliente este año.';
-      return;
-    }
-
-    const etiquetas = historial.map(p => p.fecha);
-    const acumulado = historial.map(p => p.horasAcumuladas);
-    const lineaPresupuesto = historial.map(() => presupuesto);
-
-    estadoEl.style.display = 'none';
-    canvas.style.display = 'block';
-
-    graficosCache[clave] = new Chart(canvas.getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: etiquetas,
-        datasets: [
-          {
-            label: 'Horas reales acumuladas',
-            data: acumulado,
-            borderColor: '#2f5fa3',
-            backgroundColor: 'rgba(47,95,163,0.08)',
-            fill: true,
-            tension: 0.25,
-            pointRadius: 2
-          },
-          {
-            label: 'Presupuesto',
-            data: lineaPresupuesto,
-            borderColor: '#b7860b',
-            borderDash: [6,4],
-            pointRadius: 0,
-            fill: false
-          }
-        ]
+  graficosCache[clave] = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: ['Presupuestado', 'Real', 'Por ejecutar'],
+      datasets: [{
+        data: [presupuesto, real, porEjecutar],
+        backgroundColor: ['#b7860b', colorReal, '#c9c9c9'],
+        borderRadius: 4,
+        maxBarThickness: 60
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => fmtHoras(ctx.parsed.y) + ' h' } }
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } } },
-        scales: {
-          x: { ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
-          y: { ticks: { font: { size: 10 } }, beginAtZero: true }
-        }
+      scales: {
+        x: { ticks: { font: { size: 11 } } },
+        y: { ticks: { font: { size: 10 } }, beginAtZero: true }
       }
-    });
-    canvas.parentElement.style.height = '190px';
-  }catch(err){
-    estadoEl.textContent = 'No se pudo cargar la tendencia: ' + err.message;
-  }
+    }
+  });
 }
 
 function aplicarFiltro(f){
