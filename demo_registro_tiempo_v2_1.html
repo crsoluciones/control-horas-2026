@@ -224,6 +224,19 @@
         <input type="text" id="desc" placeholder="Una línea concreta de lo que hizo hoy">
       </div>
     </div>
+
+    <div class="cover-box" id="aprobadorBox" style="display:none;">
+      <div class="chk">
+        <input type="checkbox" id="elegirAprobadorChk">
+        <label style="margin:0;" for="elegirAprobadorChk">Elegir quién aprueba esta línea (esta actividad no tiene cliente que la amarre a un gerente en particular)</label>
+      </div>
+      <div id="aprobadorWrap" style="display:none;">
+        <label for="aprobadorManual">¿Quién la aprueba?</label>
+        <select id="aprobadorManual"></select>
+        <div class="hint">Si no eliges a nadie, esta línea sube directo al Socio.</div>
+      </div>
+    </div>
+
     <div id="msg" class="hint warn"></div>
     <div class="actions">
       <button id="addBtn">+ Agregar línea</button>
@@ -382,6 +395,38 @@ function refreshActividades(){
 // varios gerentes (Dayana, Daniel, Gerson, Nathaly).
 const CODIGOS_ACCESO_TOTAL = new Set(['RC', 'DE', 'DT', 'GL', 'NC']);
 const clienteSel = $('cliente');
+// ---- Quién aprueba esto: solo aplica a horas internas (sin cliente) de
+// Encargados/Asistentes. A un Gerente, al Socio o a Administración siempre
+// los aprueba el Socio, así que a ellos nunca se les muestra este selector.
+const aprobadorManualSel = $('aprobadorManual');
+function refreshAprobadorManual(){
+  const persona = personaByCode(quienSel.value);
+  const rolesQueSiempreVanAlSocio = ['Socio', 'Gerente', 'Administracion'];
+  const aplica = persona && !rolesQueSiempreVanAlSocio.includes(persona.rol);
+
+  $('aprobadorBox').style.display = aplica ? 'flex' : 'none';
+  if(!aplica){
+    $('elegirAprobadorChk').checked = false;
+    $('aprobadorWrap').style.display = 'none';
+    return;
+  }
+
+  const valorPrevio = aprobadorManualSel.value;
+  aprobadorManualSel.innerHTML = '';
+  PERSONAL.filter(p => p.rol === 'Gerente').forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.codigo;
+    opt.textContent = `${p.codigo} — ${p.nombre}`;
+    aprobadorManualSel.appendChild(opt);
+  });
+  if(valorPrevio && [...aprobadorManualSel.options].some(o => o.value === valorPrevio)){
+    aprobadorManualSel.value = valorPrevio;
+  }
+}
+$('elegirAprobadorChk').addEventListener('change', (e) => {
+  $('aprobadorWrap').style.display = e.target.checked ? 'block' : 'none';
+});
+
 function refreshClientes(){
   const actOpt = actividadSel.selectedOptions[0];
   const cargable = actOpt && actOpt.dataset.tipo === 'CARGABLE';
@@ -389,6 +434,15 @@ function refreshClientes(){
   clienteSel.innerHTML = '';
   $('clienteReq').textContent = cargable ? '(obligatorio)' : '(no aplica)';
   clienteSel.disabled = !cargable;
+
+  refreshAprobadorManual();
+  // Si la actividad sí lleva cliente, ese cliente ya resuelve el gerente
+  // sin ambigüedad — no hace falta que nadie elija a mano.
+  if(cargable){
+    $('aprobadorBox').style.display = 'none';
+    $('elegirAprobadorChk').checked = false;
+    $('aprobadorWrap').style.display = 'none';
+  }
 
   if(!cargable){
     $('clienteHint').textContent = 'Esta actividad es tiempo interno: no lleva cliente.';
@@ -538,6 +592,7 @@ $('addBtn').addEventListener('click', () => {
     cliNombre: cargable ? cliOpt.textContent.split(' — ')[1] : '',
     horas: horas,
     desc: $('desc').value.trim(),
+    aprobadorManual: $('elegirAprobadorChk').checked ? aprobadorManualSel.value : '',
     estadoEnvio: 'pendiente'
   });
 
@@ -565,7 +620,8 @@ $('sendBtn').addEventListener('click', async () => {
         actividadCodigo: l.actCodigo,
         clienteCodigo: l.cliCodigo,
         horas: l.horas,
-        descripcion: l.desc
+        descripcion: l.desc,
+        aprobadorManual: l.aprobadorManual || ''
       });
       if(resp.ok){
         l.estadoEnvio = 'enviada';
